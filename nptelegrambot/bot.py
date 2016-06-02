@@ -29,7 +29,8 @@ class NPTelegramBot(object):
         self.dispatcher.add_handler(MessageHandler([Filters.text],
                                                    self.handle_message), group=1)
 
-        # Default commands
+        # Default commands These all require private message by default, just
+        # so they don't possibly spam groups.
         self.dispatcher.add_handler(PermissionCommandHandler('start',
                                                              [self.require_privmsg],
                                                              self.handle_help))
@@ -44,38 +45,32 @@ class NPTelegramBot(object):
 
         # Admin commands
         self.dispatcher.add_handler(PermissionCommandHandler('userlist',
-                                                             [self.try_register,
-                                                              self.require_privmsg,
+                                                             [self.require_privmsg,
                                                               partial(self.require_flag, flag="admin")],
                                                              self.users.show_list))
-        # TODO Convert to conversation handler
-        self.dispatcher.add_handler(PermissionCommandHandler('useraddflag',
-                                                             [self.try_register,
-                                                              self.require_privmsg,
-                                                              partial(self.require_flag, flag="admin")],
-                                                             self.users.add_flag))
-        # TODO Convert to conversation handler
-        self.dispatcher.add_handler(PermissionCommandHandler('userrmflag',
-                                                             [self.try_register,
-                                                              self.require_privmsg,
-                                                              partial(self.require_flag, flag="admin")],
-                                                             self.users.remove_flag))
-        # TODO Convert to conversation handler
-        self.dispatcher.add_handler(PermissionCommandHandler('groupadd',
-                                                             [self.try_register,
-                                                              self.require_privmsg,
-                                                              partial(self.require_flag, flag="admin")],
-                                                             self.groups.add_group))
-        # TODO Convert to conversation handler
-        self.dispatcher.add_handler(PermissionCommandHandler('grouprm',
-                                                             [self.try_register,
-                                                              self.require_privmsg,
-                                                              partial(self.require_flag, flag="admin")],
-                                                             self.groups.rm_group))
+
+        self.dispatcher.add_handler(ConversationHandler('useraddflag',
+                                                        [self.require_privmsg,
+                                                         partial(self.require_flag, flag="admin")],
+                                                        self.users.add_flag))
+
+        self.dispatcher.add_handler(ConversationHandler('userrmflag',
+                                                        [self.require_privmsg,
+                                                         partial(self.require_flag, flag="admin")],
+                                                        self.users.remove_flag))
+
+        self.dispatcher.add_handler(ConversationHandler('groupadd',
+                                                        [self.require_privmsg,
+                                                         partial(self.require_flag, flag="admin")],
+                                                        self.groups.add_group))
+
+        self.dispatcher.add_handler(ConversationHandler('grouprm',
+                                                        [self.require_privmsg,
+                                                         partial(self.require_flag, flag="admin")],
+                                                        self.groups.rm_group))
 
         self.dispatcher.add_handler(PermissionCommandHandler('outputcommands',
-                                                             [self.try_register,
-                                                              self.require_privmsg,
+                                                             [self.require_privmsg,
                                                               partial(self.require_flag, flag="admin")],
                                                              self.output_commands))
 
