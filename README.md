@@ -37,3 +37,10 @@ Requirements for NP Telegram Bot are:
 - [Mowcounter](http://github.com/qdot/mowcounter-telegram-bot) -
   Simple chat focused bot that counts phrase usage among users and
   keeps a high score table.
+
+# License
+
+BSD 3-Clause License, see [LICENSE](LICENSE) file for more info.
+
+Copyright (c) 2016, Kyle Machulis/qDot
+All rights reserved.
