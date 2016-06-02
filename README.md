@@ -16,14 +16,20 @@ NP Telegram Bot offers the following modules on top of python-telegram-bot:
 - Conversation Tracking - Uses python generators to make holding
   asynchronous conversations with users simple and painless.
 
-# Why use this versus just python-telegram-bot?
+# Why use this versus python-telegram-bot alone?
 
-If you're just planning to make a simple inline bot that will access a
-web API and return results, then using this is probably overkill.
-However, for anyone that wants to host a more IRC style bot that will
-remember users, take user input, and maintain state between sessions,
-NP Telegram Bot provides some handy tools to make getting up and
-running a little easier.
+NP Telegram Bot was influenced heavily by the developers decades on
+IRC, using eggdrop/grufti/supybot/etc. Whether this is good or bad is
+anyone's guess, since Telegram definitely is not IRC.
+
+Anyways, if you're just planning to make a simple inline bot that will
+access a web API and return results, then using this is overkill. Just
+go with python-telegram-bot.
+
+However, for anyone that wants to host a IRC style bot that will
+remember users, take input, have conversations, and maintain state
+between sessions, NP Telegram Bot provides some handy tools for
+getting up and running quickly.
 
 # Requirements
 
