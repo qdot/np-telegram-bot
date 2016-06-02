@@ -1,3 +1,3 @@
-from .bot import MowCounterTelegramBotCLI, MowCounterTelegramBotThread
+from .bot import NPTelegramBotCLI, NPTelegramBotThread
 
-__all__ = ["MowCounterTelegramBotCLI", "MowCounterTelegramBotThread"]
+__all__ = ["NPTelegramBotCLI", "NPTelegramBotThread"]

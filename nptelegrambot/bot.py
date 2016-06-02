@@ -2,7 +2,7 @@ from telegram.ext import Updater, MessageHandler, Filters, CommandHandler
 from .permissioncommandhandler import PermissionCommandHandler
 from .users import UserManager
 from .conversations import ConversationManager, ConversationHandler
-from .mowcounter import MowCounter
+from .groups import GroupManager
 from threading import Thread
 import argparse
 import os
@@ -10,7 +10,7 @@ import logging
 from functools import partial
 
 
-class MowCounterTelegramBot(object):
+class NPTelegramBot(object):
     FLAGS = ["admin", "def_edit", "user_flags"]
 
     def __init__(self, dbdir, tg_token):
@@ -21,18 +21,13 @@ class MowCounterTelegramBot(object):
         self.updater = Updater(token=tg_token)
         self.dispatcher = self.updater.dispatcher
         self.conversations = ConversationManager()
-        self.users = UserManager(dbdir, self.conversations)
-        self.mow = MowCounter(dbdir, self.conversations)
-
-        self.modules = [self.users, self.mow]
+        self.users = UserManager(dbdir)
+        self.groups = GroupManager(dbdir)
 
         # Make sure the message handlers are in different groups so they are
         # always run
-        self.dispatcher.add_handler(MessageHandler([Filters.text, Filters.sticker],
+        self.dispatcher.add_handler(MessageHandler([Filters.text],
                                                    self.handle_message), group=1)
-
-        self.dispatcher.add_handler(MessageHandler([Filters.text, Filters.sticker],
-                                                   self.handle_mow), group=2)
 
         # Default commands
         self.dispatcher.add_handler(PermissionCommandHandler('start',
@@ -53,72 +48,49 @@ class MowCounterTelegramBot(object):
                                                               self.require_privmsg,
                                                               partial(self.require_flag, flag="admin")],
                                                              self.users.show_list))
+        # TODO Convert to conversation handler
         self.dispatcher.add_handler(PermissionCommandHandler('useraddflag',
                                                              [self.try_register,
                                                               self.require_privmsg,
                                                               partial(self.require_flag, flag="admin")],
                                                              self.users.add_flag))
+        # TODO Convert to conversation handler
         self.dispatcher.add_handler(PermissionCommandHandler('userrmflag',
                                                              [self.try_register,
                                                               self.require_privmsg,
                                                               partial(self.require_flag, flag="admin")],
                                                              self.users.remove_flag))
-        # Definition module commands
-        self.dispatcher.add_handler(PermissionCommandHandler('mowtop10',
-                                                             [],
-                                                             self.mow.show_top10_count))
-        self.dispatcher.add_handler(PermissionCommandHandler('mowcount',
-                                                             [],
-                                                             self.mow.show_own_count))
-        self.dispatcher.add_handler(PermissionCommandHandler('mowreset',
-                                                             [self.require_privmsg,
+        # TODO Convert to conversation handler
+        self.dispatcher.add_handler(PermissionCommandHandler('groupadd',
+                                                             [self.try_register,
+                                                              self.require_privmsg,
                                                               partial(self.require_flag, flag="admin")],
-                                                             self.mow.reset))
-        self.dispatcher.add_handler(ConversationHandler('mowrequeststicker',
-                                                        [self.require_privmsg],
-                                                        self.conversations,
-                                                        self.mow.request_sticker))
-        self.dispatcher.add_handler(PermissionCommandHandler('mowstickers',
-                                                             [self.require_privmsg],
-                                                             self.mow.list_stickers))
-        self.dispatcher.add_handler(ConversationHandler('mowreviewstickers',
-                                                        [self.require_privmsg,
-                                                         partial(self.require_flag, flag="admin")],
-                                                        self.conversations,
-                                                        self.mow.review_stickers))
-        self.dispatcher.add_handler(PermissionCommandHandler('mowgroups',
-                                                             [self.require_privmsg,
+                                                             self.groups.add_group))
+        # TODO Convert to conversation handler
+        self.dispatcher.add_handler(PermissionCommandHandler('grouprm',
+                                                             [self.try_register,
+                                                              self.require_privmsg,
                                                               partial(self.require_flag, flag="admin")],
-                                                             self.mow.list_groups))
-        self.dispatcher.add_handler(ConversationHandler('mowbroadcast',
-                                                        [self.require_privmsg,
-                                                         partial(self.require_flag, flag="admin")],
-                                                        self.conversations,
-                                                        self.mow.broadcast_message))
+                                                             self.groups.rm_group))
+
+        self.dispatcher.add_handler(PermissionCommandHandler('outputcommands',
+                                                             [self.try_register,
+                                                              self.require_privmsg,
+                                                              partial(self.require_flag, flag="admin")],
+                                                             self.output_commands))
 
         # On errors, just print to console and hope someone sees it
         self.dispatcher.add_error_handler(self.handle_error)
 
     def handle_help(self, bot, update):
-        help_text = ["Hi! I'm @mowcounter_bot, the bot that counts mows.",
-                     "",
-                     "If you mow in a channel I'm in, I count it. The end.",
-                     "",
-                     "I'm open to be invited to any channel, so if you have a place that needs mows counted, just invite me!",
-                     "",
-                     "If you have any questions, my owner is @qdot76367. I'm an open source bot, too! Feel free to run your own. http://github.com/qdot/mow-counter-bot/",
-                     "",
-                     "Here's a list of commands I support:",
-                     "",
-                     "/mowcount - show how many times you've mowed.",
-                     "/mowtop10 - show mow high score table.",
-                     "/mowrequeststicker - request a sticker be added to count for mows."]
+        help_text = ["Hi! I'm an NP Telegram Bot! If I'm displaying this message, it means whoever wrote me didn't override the handle_help function. They should do that!"]
         bot.sendMessage(update.message.chat.id,
                         "\n".join(help_text),
                         parse_mode="HTML",
                         disable_web_page_preview=True)
 
     def handle_error(self, bot, update, error):
+        # TODO Add ability for bot to message owner with stack traces
         self.logger.warn("Exception thrown! %s", self.error)
 
     def try_register(self, bot, update):
@@ -141,7 +113,7 @@ class MowCounterTelegramBot(object):
         user_id = update.message.from_user.id
         if not self.groups.user_in_groups(bot, user_id):
             bot.sendMessage(update.message.chat.id,
-                            text="Please join the 'metafetish' group to use this bot! http://telegram.me/metafetish")
+                            text="Please join a group I'm in to use this command!")
             return False
         return True
 
@@ -179,12 +151,6 @@ class MowCounterTelegramBot(object):
         self.try_register(bot, update)
         self.handle_help(bot, update)
 
-    def handle_mow(self, bot, update):
-        # Ignore messages not in groups
-        if update.message.chat.id > 0:
-            return
-        self.mow.check_mows(bot, update)
-
     def handle_cancel(self, bot, update):
         if update.message.chat.id < 0:
             return
@@ -201,11 +167,10 @@ class MowCounterTelegramBot(object):
         self.updater.idle()
 
     def shutdown(self):
-        for m in self.modules:
-            m.shutdown()
+        pass
 
 
-class MowCounterTelegramBotCLI(MowCounterTelegramBot):
+class NPTelegramBotCLI(NPTelegramBot):
     def __init__(self):
         parser = argparse.ArgumentParser()
         parser.add_argument("-d", "--dbdir", dest="dbdir",
@@ -238,7 +203,7 @@ class MowCounterTelegramBotCLI(MowCounterTelegramBot):
         super().__init__(args.dbdir, tg_token)#rhost, rpass, tg_token)
 
 
-class MowCounterTelegramBotThread(MowCounterTelegramBot):
+class NPTelegramBotThread(NPTelegramBot):
     def __init__(self, dbdir, tg_token):
         super().__init__(dbdir, tg_token)
         # Steal the queue from the updater.
