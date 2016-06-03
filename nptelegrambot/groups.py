@@ -1,7 +1,7 @@
-from .base import MetafetishPickleDBBase
+from .base import NPModuleBase
 
 
-class GroupManager(MetafetishPickleDBBase):
+class GroupManager(NPModuleBase):
     def __init__(self, dbdir):
         super().__init__(__name__, dbdir, "groups", True)
 

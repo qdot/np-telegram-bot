@@ -1,4 +1,4 @@
-from .base import MetafetishModuleBase
+from .base import NPModuleBase
 from .permissioncommandhandler import PermissionCommandHandler
 
 
@@ -21,7 +21,7 @@ class ConversationHandler(PermissionCommandHandler):
         self.cm.add(update, c)
 
 
-class ConversationManager(MetafetishModuleBase):
+class ConversationManager(NPModuleBase):
     def __init__(self):
         # Conversations only survive as long as the process, so no need to
         # pickledb here.

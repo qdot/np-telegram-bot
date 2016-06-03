@@ -3,9 +3,9 @@ from .permissioncommandhandler import PermissionCommandHandler
 from .users import UserManager
 from .conversations import ConversationManager, ConversationHandler
 from .groups import GroupManager
+import redis
 from threading import Thread
 import argparse
-import os
 import logging
 from functools import partial
 
@@ -13,16 +13,16 @@ from functools import partial
 class NPTelegramBot(object):
     FLAGS = ["admin", "def_edit", "user_flags"]
 
-    def __init__(self, dbdir, tg_token):
-        if not dbdir or not os.path.isdir(dbdir):
-            print("Valid database directory required!")
-            raise RuntimeError()
+    def __init__(self, tg_token):
         self.logger = logging.getLogger(__name__)
         self.updater = Updater(token=tg_token)
         self.dispatcher = self.updater.dispatcher
         self.conversations = ConversationManager()
-        self.users = UserManager(dbdir)
-        self.groups = GroupManager(dbdir)
+        self.redis = redis.StrictRedis(host='localhost',
+                                       db=1,
+                                       decode_responses=True)
+        self.users = UserManager(self.redis)
+        # self.groups = GroupManager(dbdir)
 
         # Make sure the message handlers are in different groups so they are
         # always run
@@ -44,35 +44,41 @@ class NPTelegramBot(object):
                                                    self.handle_cancel))
 
         # Admin commands
-        self.dispatcher.add_handler(PermissionCommandHandler('userlist',
-                                                             [self.require_privmsg,
-                                                              partial(self.require_flag, flag="admin")],
-                                                             self.users.show_list))
+        # self.dispatcher.add_handler(PermissionCommandHandler('userlist',
+        #                                                      [self.require_privmsg,
+        #                                                       partial(self.require_flag, flag="admin")],
+        #                                                      self.users.show_list))
+
+        self.dispatcher.add_handler(PermissionCommandHandler('userregister',
+                                                             [self.require_privmsg],
+                                                             self.users.register))
 
         self.dispatcher.add_handler(ConversationHandler('useraddflag',
                                                         [self.require_privmsg,
                                                          partial(self.require_flag, flag="admin")],
+                                                        self.conversations,
                                                         self.users.add_flag))
 
         self.dispatcher.add_handler(ConversationHandler('userrmflag',
                                                         [self.require_privmsg,
                                                          partial(self.require_flag, flag="admin")],
+                                                        self.conversations,
                                                         self.users.remove_flag))
 
-        self.dispatcher.add_handler(ConversationHandler('groupadd',
-                                                        [self.require_privmsg,
-                                                         partial(self.require_flag, flag="admin")],
-                                                        self.groups.add_group))
+        # self.dispatcher.add_handler(ConversationHandler('groupadd',
+        #                                                 [self.require_privmsg,
+        #                                                  partial(self.require_flag, flag="admin")],
+        #                                                 self.groups.add_group))
 
-        self.dispatcher.add_handler(ConversationHandler('grouprm',
-                                                        [self.require_privmsg,
-                                                         partial(self.require_flag, flag="admin")],
-                                                        self.groups.rm_group))
+        # self.dispatcher.add_handler(ConversationHandler('grouprm',
+        #                                                 [self.require_privmsg,
+        #                                                  partial(self.require_flag, flag="admin")],
+        #                                                 self.groups.rm_group))
 
-        self.dispatcher.add_handler(PermissionCommandHandler('outputcommands',
-                                                             [self.require_privmsg,
-                                                              partial(self.require_flag, flag="admin")],
-                                                             self.output_commands))
+        # self.dispatcher.add_handler(PermissionCommandHandler('outputcommands',
+        #                                                      [self.require_privmsg,
+        #                                                       partial(self.require_flag, flag="admin")],
+        #                                                      self.output_commands))
 
         # On errors, just print to console and hope someone sees it
         self.dispatcher.add_error_handler(self.handle_error)
@@ -168,8 +174,6 @@ class NPTelegramBot(object):
 class NPTelegramBotCLI(NPTelegramBot):
     def __init__(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument("-d", "--dbdir", dest="dbdir",
-                            help="Directory for pickledb storage")
         parser.add_argument("-r", "--rhost", dest="rhost",
                             help="Host for redis db")
         parser.add_argument("-p", "--rpass", dest="rpass",
@@ -190,12 +194,7 @@ class NPTelegramBotCLI(NPTelegramBot):
             print("Cannot open token file!")
             raise RuntimeError()
 
-        if (not args.dbdir or not os.path.isdir(args.dbdir)) and (not rhost and not rpass):
-            print("Valid database directory or host required!")
-            parser.print_help()
-            raise RuntimeError()
-
-        super().__init__(args.dbdir, tg_token)#rhost, rpass, tg_token)
+        super().__init__(tg_token)
 
 
 class NPTelegramBotThread(NPTelegramBot):

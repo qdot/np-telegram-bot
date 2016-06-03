@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import logging
-from mowcounterbot import MowCounterTelegramBotCLI
+from nptelegrambot import NPTelegramBotCLI
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.DEBUG,
 
 def main():
     try:
-        bot = MowCounterTelegramBotCLI()
+        bot = NPTelegramBotCLI()
     except RuntimeError:
         return 0
     print("Starting up bot")
