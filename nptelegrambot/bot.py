@@ -2,7 +2,7 @@ from telegram.ext import Updater, MessageHandler, Filters, CommandHandler
 from .permissioncommandhandler import PermissionCommandHandler
 from .users import UserManager
 from .conversations import ConversationManager, ConversationHandler
-from .groups import GroupManager
+from .chats import ChatManager
 import redis
 from threading import Thread
 import argparse
@@ -22,14 +22,17 @@ class NPTelegramBot(object):
                                        db=1,
                                        decode_responses=True)
         self.users = UserManager(self.redis)
-        self.groups = GroupManager(self.redis)
-        #self.groups.add_join_filter(partial(GroupManager.min_size_filter, min_size=5))
-        self.groups.add_join_filter(self.groups.block_filter)
+        self.chats = ChatManager(self.redis)
+        self.chats.add_join_filter(self.chats.block_filter)
 
         # Make sure the message handlers are in different groups so they are
         # always run
         self.dispatcher.add_handler(MessageHandler([Filters.text],
-                                                   self.handle_message), group=1)
+                                                   self.handle_message),
+                                    group=1)
+        self.dispatcher.add_handler(MessageHandler([Filters.status_update],
+                                                   self.chats.process_status_update),
+                                    group=2)
 
         # Default commands These all require private message by default, just
         # so they don't possibly spam groups.
@@ -65,24 +68,22 @@ class NPTelegramBot(object):
                                                         [self.require_privmsg,
                                                          partial(self.require_flag, flag="admin")],
                                                         self.conversations,
-                                                        self.groups.broadcast))
+                                                        self.chats.broadcast))
         self.dispatcher.add_handler(PermissionCommandHandler('grouplist',
                                                              [self.require_privmsg,
                                                               partial(self.require_flag, flag="admin")],
                                                              self.conversations,
-                                                             self.groups.list_known_chats))
+                                                             self.chats.list_known_chats))
         self.dispatcher.add_handler(ConversationHandler('groupleave',
                                                         [self.require_privmsg,
                                                          partial(self.require_flag, flag="admin")],
                                                         self.conversations,
-                                                        self.groups.leave_chat))
+                                                        self.chats.leave_chat))
         self.dispatcher.add_handler(ConversationHandler('groupblock',
                                                         [self.require_privmsg,
                                                          partial(self.require_flag, flag="admin")],
                                                         self.conversations,
-                                                        partial(self.groups.leave_chat, block=True)))
-        self.dispatcher.add_handler(MessageHandler([Filters.status_update],
-                                                   self.groups.process_status_update))
+                                                        partial(self.chats.leave_chat, block=True)))
 
         # self.dispatcher.add_handler(PermissionCommandHandler('outputcommands',
         #                                                      [self.require_privmsg,
@@ -110,21 +111,6 @@ class NPTelegramBot(object):
         # Always returns true, as running any command will mean the user is
         # registered. We just want to make sure they're in the DB so flags can
         # be added if needed.
-        return True
-
-    def require_group(self, bot, update):
-        # Special Case: If the bot has no users yet, we need to let the first
-        # user register so they can be an admin. After that, always require
-        # membership
-        if self.users.get_num_users() == 0:
-            return True
-        if len(self.groups.get_groups()) == 0:
-            return True
-        user_id = update.message.from_user.id
-        if not self.groups.user_in_groups(bot, user_id):
-            bot.sendMessage(update.message.chat.id,
-                            text="Please join a group I'm in to use this command!")
-            return False
         return True
 
     # When used with PermissionCommandHandler, Function requires currying with
