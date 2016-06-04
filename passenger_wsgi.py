@@ -4,10 +4,10 @@ import configparser
 import importlib
 
 # Make sure we're using the right python. Assume we're running out of the venv.
-# INTERP = os.path.join(os.getcwd(), 'bin', 'python')
-# if sys.executable != INTERP:
-#     os.execl(INTERP, INTERP, *sys.argv)
-#     sys.path.append(os.getcwd())
+INTERP = os.path.join(os.getcwd(), 'bin', 'python')
+if sys.executable != INTERP:
+    os.execl(INTERP, INTERP, *sys.argv)
+    sys.path.append(os.getcwd())
 
 config = configparser.ConfigParser()
 config.read("config.ini")
