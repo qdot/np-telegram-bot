@@ -3,26 +3,43 @@ from .permissioncommandhandler import PermissionCommandHandler
 from .users import UserManager
 from .conversations import ConversationManager, ConversationHandler
 from .chats import ChatManager
-import redis
 from threading import Thread
+from functools import partial
+import redis
 import argparse
 import logging
-from functools import partial
+import configparser
 
 
 class NPTelegramBot(object):
     FLAGS = ["admin", "def_edit", "user_flags"]
 
-    def __init__(self, tg_token):
+    def __init__(self, config):
         self.logger = logging.getLogger(__name__)
+        if "token" not in config:
+            print("Cannot load token!")
+            raise RuntimeError()
+        tg_token = config["token"]
+
+        if "redis_host" in config:
+            redis_args = {}
+            redis_args["host"] = config["redis_host"]
+            redis_args["db"] = config["redis_db_num"]
+            if "redis_port" in config:
+                redis_args["port"] = config["redis_port"]
+            if "redis_password" in config:
+                redis_args["password"] = config["redis_password"]
+            self.store = redis.StrictRedis(decode_responses=True,
+                                           **redis_args)
+        else:
+            print("No backing store specified in config file!")
+            raise RuntimeError()
+
         self.updater = Updater(token=tg_token)
         self.dispatcher = self.updater.dispatcher
         self.conversations = ConversationManager()
-        self.redis = redis.StrictRedis(host='localhost',
-                                       db=1,
-                                       decode_responses=True)
-        self.users = UserManager(self.redis)
-        self.chats = ChatManager(self.redis)
+        self.users = UserManager(self.store)
+        self.chats = ChatManager(self.store)
         self.chats.add_join_filter(self.chats.block_filter)
 
         # Make sure the message handlers are in different groups so they are
@@ -158,31 +175,38 @@ class NPTelegramBot(object):
 class NPTelegramBotCLI(NPTelegramBot):
     def __init__(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument("-r", "--rhost", dest="rhost",
-                            help="Host for redis db")
-        parser.add_argument("-p", "--rpass", dest="rpass",
-                            help="Password for redis db")
-        parser.add_argument("-t", "--token", dest="token_file",
-                            help="File containing telegram API token")
+        parser.add_argument("-c", "--config", dest="config",
+                            help="Configuration File to use")
+        parser.add_argument("-b", "--bot", dest="bot",
+                            help="Bot name from configuration file to use")
         args = parser.parse_args()
 
-        if not args.token_file:
-            print("Token file argument required!")
+        if not args.config:
+            print("Config file argument required!")
             parser.print_help()
-            raise RuntimeError()
+            return
+
+        if not args.bot:
+            print("Bot name argument required!")
+            parser.print_help()
+            return
 
         try:
-            with open(args.token_file, "r") as f:
-                tg_token = f.readline().strip()
+            config = configparser.ConfigParser()
+            config.read(args.config)
         except:
-            print("Cannot open token file!")
-            raise RuntimeError()
+            print("Cannot read config file!")
+            return
 
-        super().__init__(tg_token)
+        if args.bot not in config.sections():
+            print("Bot {0} not in config file!".format(args.bot))
+            return
+
+        super().__init__(config[args.bot])
 
 
 class NPTelegramBotThread(NPTelegramBot):
-    def __init__(self, dbdir, tg_token):
+    def __init__(self, config_file, bot_name):
         super().__init__(dbdir, tg_token)
         # Steal the queue from the updater.
         self.update_queue = self.updater.update_queue

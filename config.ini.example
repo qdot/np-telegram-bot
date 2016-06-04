@@ -1,0 +1,5 @@
+[bot_name_goes_here]
+token=telegram_token_here
+redis_host=localhost
+redis_port=6379
+redis_db_num=0
