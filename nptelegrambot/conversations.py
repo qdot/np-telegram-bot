@@ -1,3 +1,4 @@
+from telegram import ReplyKeyboardHide
 from .base import NPModuleBase
 from .permissioncommandhandler import PermissionCommandHandler
 
@@ -31,25 +32,34 @@ class ConversationManager(NPModuleBase):
         self.conversations = {}
 
     def add(self, update, conversation):
-        self.conversations[update.message.chat.id] = conversation
+        self.conversations[(update.message.chat.id,
+                            update.message.from_user.id)] = conversation
 
     def check(self, bot, update):
-        chat_id = update.message.chat.id
-        if chat_id not in self.conversations.keys():
+        conv_id = (update.message.chat.id, update.message.from_user.id)
+        if conv_id not in self.conversations.keys():
             return False
         try:
             # send only takes a single argument, so case up the current bot and
             # update in a tuple
-            self.conversations[chat_id].send((bot, update))
+            self.conversations[conv_id].send((bot, update))
         except StopIteration:
             self.cancel(bot, update)
         return True
 
-    def cancel(self, bot, update):
+    def cancel(self, bot, update, conv_ended=False):
         chat_id = update.message.chat.id
-        if chat_id not in self.conversations.keys():
+        user_id = update.message.from_user.id
+        if (chat_id, user_id) not in self.conversations.keys():
+            bot.sendMessage(update.message.chat.id,
+                            text="Don't have anything to cancel!",
+                            reply_markup=ReplyKeyboardHide())
             return False
-        del self.conversations[chat_id]
+        del self.conversations[(chat_id, user_id)]
+        # Kill any currently displayed keyboard
+        bot.sendMessage(update.message.chat.id,
+                        text="Command finished!",
+                        reply_markup=ReplyKeyboardHide())
         return True
 
     def shutdown(self):

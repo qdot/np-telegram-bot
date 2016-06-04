@@ -41,7 +41,7 @@ class NPTelegramBot(object):
                                                              [self.require_privmsg],
                                                              self.handle_help))
         self.dispatcher.add_handler(CommandHandler('cancel',
-                                                   self.handle_cancel))
+                                                   self.conversations.cancel))
 
         # Admin commands
         # self.dispatcher.add_handler(PermissionCommandHandler('userlist',
@@ -151,17 +151,6 @@ class NPTelegramBot(object):
             return
         self.try_register(bot, update)
         self.handle_help(bot, update)
-
-    def handle_cancel(self, bot, update):
-        if update.message.chat.id < 0:
-            return
-        if not self.conversations.cancel(bot, update):
-            bot.sendMessage(update.message.chat.id,
-                            text="Don't have anything to cancel!")
-            self.handle_help(bot, update)
-            return
-        bot.sendMessage(update.message.chat.id,
-                        text="Command canceled!")
 
     def start_loop(self):
         self.updater.start_polling()
