@@ -32,7 +32,9 @@ class ChatRedisTransactions(object):
 
     def set_chat_id(self, old_chat_id, new_chat_id):
         # In case we switch from group to supergroup. Annoying!
-        pass
+        self.redis.rename(old_chat_id, new_chat_id)
+        self.redis.rename(self.get_chat_flag_key(old_chat_id),
+                          self.get_chat_flag_key(new_chat_id))
 
     def update_chat_size(self, chat_id, chat_size):
         self.redis.hset(chat_id, "size", chat_size)
@@ -61,7 +63,7 @@ class ChatRedisTransactions(object):
         self.redis.srem("chat-flags", flag)
 
 
-class GroupManager(NPModuleBase):
+class ChatManager(NPModuleBase):
     def __init__(self, redis):
         super().__init__(__name__)
         self.trans = ChatRedisTransactions(redis)
@@ -136,7 +138,8 @@ class GroupManager(NPModuleBase):
     # migration is sent as both from_id and to_id. Both messages contain the
     # same information, so we can use that to update ourselves.
     def process_migrate_to_chat_id(self, bot, update):
-        pass
+        self.trans.set_chat_id(update.message.from_chat_id,
+                               update.message.migrate_to_chat_id)
 
     def process_new_chat_title(self, bot, update):
         chat = update.message.chat
@@ -164,7 +167,7 @@ class GroupManager(NPModuleBase):
 
     def list_known_chats(self, bot, update):
         chats = self.get_chats()
-        msg = "Groups I know about and my status in them:\n\n"
+        msg = "Chats I know about and my status in them:\n\n"
         for c in chats:
             msg += "{0} - {1}\n".format(c["title"], c["id"])
             msg += "- Status: {0}\n".format(c["status"])
