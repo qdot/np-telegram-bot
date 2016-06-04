@@ -15,6 +15,8 @@ config.read("config.ini")
 
 bots = {}
 for bot in config.sections():
+    if "disabled" in config[bot]:
+        continue
     if "webhook" not in config[bot]:
         continue
     if "repo_name" not in config[bot]:
@@ -31,6 +33,9 @@ for bot in config.sections():
     importlib.import_module(module)
     bots[config[bot]["token"]] = getattr(sys.modules[module],
                                          "create_bot")(config[bot])
+
+if len(bots.keys()) == 0:
+    raise RuntimeError("Not running any bots!")
 
 from flask import Flask, request
 import telegram
