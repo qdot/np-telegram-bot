@@ -1,5 +1,19 @@
 [bot_name_goes_here]
-token=telegram_token_here
+# 1 if we don't want this bot brought up in this config, but want to
+# keep configuration in file anyways.
+disabled=1
+# Telegram token for bot
+token=telegram_token_goes_here
+# Redis DB information
 redis_host=localhost
 redis_port=6379
+redis_password=redis_password_goes_here
 redis_db_num=0
+# URL of Webhook this will be hosted behind
+webhook_url=https://[url]/[token]
+# Directory bot code will be in
+repo_name=directory_of_repo_checkout
+# Module in bot code for python to load
+module_name=python_module_in_repo_checkout
+# 1 if this bot should be brought up in webhooks
+webhook=1
