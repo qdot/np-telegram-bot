@@ -1,4 +1,5 @@
 from telegram.ext import CommandHandler
+from telegram import ReplyKeyboardMarkup, KeyboardButton
 from .base import NPModuleBase
 
 
@@ -51,6 +52,9 @@ class UserRedisTransactions(object):
         self.redis.delete(id)
         self.redis.delete("{0}:flags".format(id))
 
+    def get_user_unadded_flags(self, id):
+        return self.redis.sdiff("user-flags", "{0}:flags".format(id))
+
 
 class UserManager(NPModuleBase):
     def __init__(self, store):
@@ -94,41 +98,87 @@ class UserManager(NPModuleBase):
     def commands(self):
         return ""
 
-    def remove_flag(self, bot, update):
-        while True:
-            bot.sendMessage(update.message.chat.id,
-                            text="Forward me a message from the user you want to add flags to, or /cancel.")
-            (bot, update) = yield
-            (user_id, user) = self.get_flag_edit_user(bot, update)
-            if user_id is not None:
-                break
-        while True:
-            bot.sendMessage(update.message.chat.id,
-                            text="What is the name of the flag you would like to remove for %s?" % (user["username"]))
-            # TODO: show permissions flag keyboard here
-            (bot, update) = yield
-            user_flag = update.message.text
-            self.trans.remove_user_flag(user_id, user_flag)
-            bot.sendMessage(update.message.chat.id,
-                            text="Removed flag %s from %s" % (user_flag, user_name_or_id))
+    def form_username(self, user):
+        return "{0}{1}{2}".format(user["firstname"] + " " if user["firstname"] is not None else "",
+                                  user["lastname"] + " " if user["lastname"] is not None else "",
+                                  "(@{0})".format(user["username"]) if user["username"] else "")
 
-    def add_flag(self, bot, update):
+    def remove_flag(self, bot, update):
         while True:
             bot.sendMessage(update.message.chat.id,
                             text="Forward me a message from the user you want to remove flags from, or /cancel.")
             (bot, update) = yield
-            (user_id, user) = self.get_flag_edit_user(bot, update)
-            if user_id is not None:
+            if (update.message.forward_from is not None and
+                self.is_valid_user(update.message.forward_from.id)):
+                user_id = update.message.forward_from.id
+                user = self.trans.get_user(user_id)
                 break
         while True:
+            flags = self.trans.get_user_flags(user_id)
+            if not flags or len(flags) is 0:
+                bot.sendMessage(update.message.chat.id,
+                                text="User {0} has no flags to remove!".format(self.form_username(user)))
+                return
+            buttons = []
+            row = []
+            for f in flags:
+                row.append(KeyboardButton(f))
+            buttons.append(row)
+            keyboard = ReplyKeyboardMarkup(buttons,
+                                           one_time_keyboard=True,
+                                           resize_keyboard=True)
             bot.sendMessage(update.message.chat.id,
-                            text="What is the name of the flag you would like to add for %s? If you're done, /cancel." % (user["username"]))
+                            text="What is the name of the flag you would like to remove for {0}? If you're done, /cancel".format(self.form_username(user)),
+                            reply_markup=keyboard)
             # TODO: show permissions flag keyboard here
             (bot, update) = yield
             user_flag = update.message.text
-            self.trans.add_user_flag(update.message.from_user.id, user_flag)
+            if user_flag not in flags:
+                self.sendMessage(update.message.chat.id,
+                                 text="That's not a valid flag! Try again.")
+                continue
+            self.trans.remove_user_flag(user_id, user_flag)
             bot.sendMessage(update.message.chat.id,
-                            text="Added flag %s to %s" % (user_flag, user_name_or_id))
+                            text="Removed flag {0}. {1} now has flags: {2}".format(user_flag, self.form_username(user), self.trans.get_user_flags(user_id)))
+
+    def add_flag(self, bot, update):
+        while True:
+            bot.sendMessage(update.message.chat.id,
+                            text="Forward me a message from the user you want to add flags to, or /cancel.")
+            (bot, update) = yield
+            if (update.message.forward_from is not None and
+                self.is_valid_user(update.message.forward_from.id)):
+                user_id = update.message.forward_from.id
+                user = self.trans.get_user(user_id)
+                break
+        # Build the keyboard
+        while True:
+            flags = self.trans.get_user_unadded_flags(user_id)
+            if not flags or len(flags) is 0:
+                bot.sendMessage(update.message.chat.id,
+                                text="User {0} has no flags to add!".format(self.form_username(user)))
+                return
+            buttons = []
+            row = []
+            for f in flags:
+                row.append(KeyboardButton(f))
+            buttons.append(row)
+            keyboard = ReplyKeyboardMarkup(buttons,
+                                           one_time_keyboard=True,
+                                           resize_keyboard=True)
+            bot.sendMessage(update.message.chat.id,
+                            text="What is the name of the flag you would like to add for {0}? If you're done, /cancel".format(self.form_username(user)),
+                            reply_markup=keyboard)
+            # TODO: show permissions flag keyboard here
+            (bot, update) = yield
+            user_flag = update.message.text
+            if user_flag not in flags:
+                self.sendMessage(update.message.chat.id,
+                                 text="That's not a valid flag! Try again.")
+                continue
+            self.trans.add_user_flag(user_id, user_flag)
+            bot.sendMessage(update.message.chat.id,
+                            text="Added flag {0}. {1} now has flags: {2}".format(user_flag, self.form_username(user), self.trans.get_user_flags(user_id)))
 
     def has_flag(self, user_id, flag):
         user_id = str(user_id)
