@@ -86,9 +86,10 @@ class GroupManager(NPModuleBase):
     def run_join_checks(self, bot, update):
         chat = update.message.chat
         for f in self.join_filters:
-            if not f(bot, update):
+            reason = f(bot, update)
+            if reason is not None:
                 bot.sendMessage(chat.id,
-                                text="Sorry, I can't be in this chat!")
+                                text="Sorry, I can't be in this chat! {0}".format(reason if type(reason) is str else ""))
                 bot.leaveChat(chat.id)
                 return False
         return True
@@ -189,14 +190,20 @@ class GroupManager(NPModuleBase):
     @staticmethod
     def min_size_filter(bot, update, min_size):
         count = bot.get_chat_member_count(update.message.chat.id)
-        return count >= min_size
+        if count >= min_size:
+            return "Chat size is less than {0} members.".format(min_size)
+        return None
 
     @staticmethod
     def max_size_filter(bot, update, max_size):
         count = bot.get_chat_member_count(update.message.chat.id)
-        return count <= max_size
+        if count <= max_size:
+            return "Chat size is greater than {0} members.".format(max_size)
+        return None
 
     def block_filter(self, bot, update):
-        if "block" in self.trans.get_chat_flags(str(update.message.chat.id)):
-            return False
-        return True
+        flags = self.trans.get_chat_flags(update.message.chat.id)
+        if flags is not None and "block" in flags:
+            # Don't actually tell chat they're banned.
+            return True
+        return None
