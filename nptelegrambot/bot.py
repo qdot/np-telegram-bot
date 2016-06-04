@@ -206,8 +206,12 @@ class NPTelegramBotCLI(NPTelegramBot):
 
 
 class NPTelegramBotThread(NPTelegramBot):
-    def __init__(self, config_file, bot_name):
-        super().__init__(dbdir, tg_token)
+    def __init__(self, config):
+        super().__init__(config)
+        if "webhook_url" not in config:
+            print("No webhook URL to bind to!")
+            raise RuntimeError()
+        self.updater.bot.setWebhook(webhook_url=config["webhook_url"])
         # Steal the queue from the updater.
         self.update_queue = self.updater.update_queue
 
@@ -222,3 +226,6 @@ class NPTelegramBotThread(NPTelegramBot):
         self.thread.join(1)
         super().shutdown()
 
+
+def create_bot(config):
+    return NPTelegramBotThread(config)
