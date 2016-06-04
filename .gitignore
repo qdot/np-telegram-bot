@@ -62,8 +62,7 @@ target/
 .ipynb_checkpoints
 
 # Don't check in our token
-token.txt
+token*.txt
 
-# Don't check in pickledbs
-dbs
-*.db
+# Don't check in config files other than the sample
+config.ini
