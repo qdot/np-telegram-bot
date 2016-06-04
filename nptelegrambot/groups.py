@@ -46,7 +46,7 @@ class ChatRedisTransactions(object):
         return "{0}:flags".format(chat_id)
 
     def get_chat_flags(self, chat_id):
-        self.redis.smembers(self.get_chat_flag_key(chat_id))
+        return self.redis.smembers(self.get_chat_flag_key(chat_id))
 
     def add_chat_flag(self, chat_id, flag):
         self.redis.sadd(self.get_chat_flag_key(chat_id), flag)
