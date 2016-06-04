@@ -1,83 +1,202 @@
 from .base import NPModuleBase
 
 
+class ChatRedisTransactions(object):
+    def __init__(self, redis):
+        "docstring"
+        self.redis = redis
+
+    def add_chat(self, chat_id, chat_title, chat_username):
+        self.redis.hmset(chat_id, {"id": chat_id,
+                                   "title": chat_title,
+                                   "username": chat_username})
+
+    def set_chat_title(self, chat_id, chat_title):
+        self.redis.hset(chat_id, "title", chat_title)
+
+    def set_chat_username(self, chat_id, chat_username):
+        self.redis.hset(chat_id, "username", chat_username)
+
+    def get_chat(self, chat_id):
+        return self.redis.hgetall(chat_id)
+
+    def get_chats(self):
+        chats = self.redis.hkeys("chat-status")
+        pipe = self.redis.pipeline()
+        for c in chats:
+            pipe.hgetall(c)
+        return pipe.execute()
+
+    def get_chat_ids(self):
+        return self.redis.hkeys("chat-status")
+
+    def set_chat_id(self, old_chat_id, new_chat_id):
+        # In case we switch from group to supergroup. Annoying!
+        pass
+
+    def update_chat_size(self, chat_id, chat_size):
+        self.redis.hset(chat_id, "size", chat_size)
+        self.redis.hset("chat-size", chat_id, chat_size)
+
+    def update_chat_status(self, chat_id, chat_status):
+        self.redis.hset(chat_id, "status", chat_status)
+        self.redis.hset("chat-status", chat_id, chat_status)
+
+    def get_chat_flag_key(self, chat_id):
+        return "{0}:flags".format(chat_id)
+
+    def get_chat_flags(self, chat_id):
+        self.redis.smembers(self.get_chat_flag_key(chat_id))
+
+    def add_chat_flag(self, chat_id, flag):
+        self.redis.sadd(self.get_chat_flag_key(chat_id), flag)
+
+    def get_flags(self):
+        self.redis.smembers("chat-flags")
+
+    def add_flag(self, flag):
+        self.redis.sadd("chat-flags", flag)
+
+    def remove_flag(self, flag):
+        self.redis.srem("chat-flags", flag)
+
+
 class GroupManager(NPModuleBase):
-    def __init__(self, dbdir):
-        super().__init__(__name__, dbdir, "groups", True)
+    def __init__(self, redis):
+        super().__init__(__name__)
+        self.trans = ChatRedisTransactions(redis)
+        # Just always add the block flag. Doesn't matter if it's already there.
+        self.trans.add_flag("block")
+        self.join_filters = []
 
-    def add_group(self, bot, update):
-        group_name = update.message.text.partition(" ")[2].strip().lower()
-        if group_name[0] is not "@":
-            bot.sendMessage(update.message.chat_id,
-                            text="Please specify group name with a leading @! (You used %s)" % (group_name))
+    def process_status_update(self, bot, update):
+        if update.message.new_chat_member:
+            self.process_new_chat_member(bot, update)
+        elif update.message.left_chat_member:
+            self.process_left_chat_member(bot, update)
+        elif update.message.group_chat_created:
+            self.process_group_chat_created(bot, update)
+        elif update.message.supergroup_chat_created:
+            self.process_supergroup_chat_created(bot, update)
+        elif update.message.migrate_from_chat_id:
+            self.process_migrate_to_chat_id(bot, update)
+        elif update.message.new_chat_title:
+            self.process_new_chat_title(bot, update)
+
+    def run_join_checks(self, bot, update):
+        chat = update.message.chat
+        for f in self.join_filters:
+            if not f(bot, update):
+                bot.sendMessage(chat.id,
+                                text="Sorry, I can't be in this chat!")
+                bot.leaveChat(chat.id)
+                return False
+        return True
+
+    def process_new_chat_member(self, bot, update):
+        # from will be user that invited member, if any
+        # new_chat_member will be member that left
+        chat = update.message.chat
+        if update.message.new_chat_member.id != bot.id:
+            chat_size = bot.getChatMembersCount(chat.id)
+            self.trans.update_chat_size(chat.id, chat_size)
             return
-        try:
-            me = bot.getMe()
-            chat_status = bot.getChatMember(group_name, me.id)
-            if chat_status.status != "administrator":
-                bot.sendMessage(update.message.chat_id,
-                                text="Please make sure I'm an admin in %s!" % (group_name))
-                return
-        except:
-            bot.sendMessage(update.message.chat_id,
-                            text="Please make sure %s exists and that I'm an admin there!" % (group_name))
+        if not self.run_join_checks(bot, update):
             return
-        self.db.set(group_name, {})
-        bot.sendMessage(update.message.chat_id,
-                        text='Group %s added!' % (group_name))
+        self.trans.add_chat(chat.id, chat.title, chat.username)
+        member_info = bot.getChatMember(chat.id, bot.id)
+        self.trans.update_chat_status(chat.id, member_info["status"])
+        chat_size = bot.getChatMembersCount(chat.id)
+        self.trans.update_chat_size(chat.id, chat_size)
 
-    def rm_group(self, bot, update):
-        group_name = update.message.text.partition(" ")[2].strip().lower()
-        if group_name[0] is not "@":
-            bot.sendMessage(update.message.chat_id,
-                            text="Please specify group name with a leading @! (You used %s)" % (group_name))
+    def process_left_chat_member(self, bot, update):
+        # from will be user that kicked member, if any
+        # left_channel_member will be member that left
+        # We have joined a new channel
+        chat = update.message.chat
+        if update.message.left_chat_member.id != bot.id:
+            chat_size = bot.getChatMembersCount(chat.id)
+            self.trans.update_chat_size(chat.id, chat_size)
             return
-        try:
-            me = bot.getMe()
-            chat_status = bot.getChatMember(group_name, me.id)
-            if chat_status.status != "left":
-                bot.sendMessage(update.message.chat_id,
-                                text="Please make sure I'm no longer in %s!" % (group_name))
-                return
-        except:
-            pass
-        self.db.rem(group_name)
-        bot.sendMessage(update.message.chat_id,
-                        text='Group %s removed!' % (group_name))
+        chat = update.message.chat
+        member_info = bot.getChatMember(chat.id, bot.id)
+        self.trans.update_chat_status(chat.id, member_info["status"])
 
-    def user_in_groups(self, bot, user_id):
-        if type(user_id) is not str:
-            user_id = str(user_id)
-        try:
-            for group in self.db.dkeys("groups"):
-                users = self.db.get(group)
-                if user_id not in users.keys():
-                    continue
-                user_status = users[user_id]
-                if user_status in ["creator", "administrator", "member"]:
-                    return True
-        except:
-            pass
-        # Any time we don't find the member in either channel, update all
-        # tracked channels
-        is_in_group = False
-        for group in self.db.getall():
-            member = bot.getChatMember(group, user_id)
-            if member is None:
-                continue
-            user_db = self.db.get(group)
-            user_db[user_id] = member.status
-            self.db.set(group, user_db)
-            if member.status in ["creator", "administrator", "member"]:
-                is_in_group = True
-        return is_in_group
+    def process_group_chat_created(self, bot, update):
+        # Bot invited as a creating member of a group chat
+        if not self.run_join_checks(bot, update):
+            return
 
-    def get_groups(self):
-        return self.db.getall()
-    # def update_group_list(self, bot, user_id):
-    #     users = self.db.dkeys("users")
-    #     for u in users:
-    #         user_status = self.db.dget("users", u)
-    #         member = bot.getChatMember(self.group_name, u)
-    #         if user_status is not member.status:
-    #             self.db.dadd("users", u, member.status)
+    def process_supergroup_chat_created(self, bot, update):
+        # Bot invited as a creating member of a supergroup chat (does this happen?)
+        if not self.run_join_checks(bot, update):
+            return
+
+    # migration is sent as both from_id and to_id. Both messages contain the
+    # same information, so we can use that to update ourselves.
+    def process_migrate_to_chat_id(self, bot, update):
+        pass
+
+    def process_new_chat_title(self, bot, update):
+        chat = update.message.chat
+        self.trans.set_chat_title(chat.id, chat.title)
+
+    def broadcast(self, bot, update):
+        bot.sendMessage(update.message.chat.id,
+                        text="What message would you like to broadcast to groups I'm in?")
+        (bot, update) = yield
+        message = update.message.text
+        chats = self.trans.get_chats()
+        for c in chats:
+            if c["status"] not in ["left", "kicked"]:
+                try:
+                    bot.sendMessage(c["id"],
+                                    text=message)
+                except:
+                    # If we errored out, we've been kicked from the channel.
+                    # Since telegram doesn't notify us we've been kicked, this
+                    # is our only way to know. Update our status accordingly.
+                    self.trans.update_chat_status(c["id"], "kicked")
+
+    def add_join_filter(self, join_filter):
+        self.join_filters.append(join_filter)
+
+    def list_known_chats(self, bot, update):
+        chats = self.get_chats()
+        msg = "Groups I know about and my status in them:\n\n"
+        for c in chats:
+            msg += "{0} - {1}\n".format(c["title"], c["id"])
+            msg += "- Status: {0}\n".format(c["status"])
+            msg += "- Size: {0}\n\n".format(c["size"])
+        bot.sendMessage(update.message.chat.id,
+                        text=msg)
+
+    def leave_chat(self, bot, update, block=False):
+        while True:
+            bot.sendMessage(update.message.chat.id,
+                            text="Enter the id of the chat you'd like to leave/block, or /cancel.")
+            (bot, update) = yield
+            leave_id = update.message.text
+            leave_chat = self.trans.get_chat(leave_id)
+            if leave_chat is not None:
+                break
+            bot.sendMessage(update.message.chat.id,
+                            text="Not a valid ID for a channel I'm in, try again!")
+        bot.leaveChat(leave_chat["id"])
+        if block:
+            self.trans.add_chat_flag(leave_chat["id"], "block")
+
+    @staticmethod
+    def min_size_filter(bot, update, min_size):
+        count = bot.get_chat_member_count(update.message.chat.id)
+        return count >= min_size
+
+    @staticmethod
+    def max_size_filter(bot, update, max_size):
+        count = bot.get_chat_member_count(update.message.chat.id)
+        return count <= max_size
+
+    def block_filter(self, bot, update):
+        if "block" in self.trans.get_chat_flags(str(update.message.chat.id)):
+            return False
+        return True

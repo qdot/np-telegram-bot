@@ -22,7 +22,9 @@ class NPTelegramBot(object):
                                        db=1,
                                        decode_responses=True)
         self.users = UserManager(self.redis)
-        # self.groups = GroupManager(dbdir)
+        self.groups = GroupManager(self.redis)
+        #self.groups.add_join_filter(partial(GroupManager.min_size_filter, min_size=5))
+        self.groups.add_join_filter(self.groups.block_filter)
 
         # Make sure the message handlers are in different groups so they are
         # always run
@@ -43,12 +45,6 @@ class NPTelegramBot(object):
         self.dispatcher.add_handler(CommandHandler('cancel',
                                                    self.conversations.cancel))
 
-        # Admin commands
-        # self.dispatcher.add_handler(PermissionCommandHandler('userlist',
-        #                                                      [self.require_privmsg,
-        #                                                       partial(self.require_flag, flag="admin")],
-        #                                                      self.users.show_list))
-
         self.dispatcher.add_handler(PermissionCommandHandler('userregister',
                                                              [self.require_privmsg],
                                                              self.users.register))
@@ -65,15 +61,28 @@ class NPTelegramBot(object):
                                                         self.conversations,
                                                         self.users.remove_flag))
 
-        # self.dispatcher.add_handler(ConversationHandler('groupadd',
-        #                                                 [self.require_privmsg,
-        #                                                  partial(self.require_flag, flag="admin")],
-        #                                                 self.groups.add_group))
-
-        # self.dispatcher.add_handler(ConversationHandler('grouprm',
-        #                                                 [self.require_privmsg,
-        #                                                  partial(self.require_flag, flag="admin")],
-        #                                                 self.groups.rm_group))
+        self.dispatcher.add_handler(ConversationHandler('groupbroadcast',
+                                                        [self.require_privmsg,
+                                                         partial(self.require_flag, flag="admin")],
+                                                        self.conversations,
+                                                        self.groups.broadcast))
+        self.dispatcher.add_handler(PermissionCommandHandler('grouplist',
+                                                             [self.require_privmsg,
+                                                              partial(self.require_flag, flag="admin")],
+                                                             self.conversations,
+                                                             self.groups.list_known_chats))
+        self.dispatcher.add_handler(ConversationHandler('groupleave',
+                                                        [self.require_privmsg,
+                                                         partial(self.require_flag, flag="admin")],
+                                                        self.conversations,
+                                                        self.groups.leave_chat))
+        self.dispatcher.add_handler(ConversationHandler('groupblock',
+                                                        [self.require_privmsg,
+                                                         partial(self.require_flag, flag="admin")],
+                                                        self.conversations,
+                                                        partial(self.groups.leave_chat, block=True)))
+        self.dispatcher.add_handler(MessageHandler([Filters.status_update],
+                                                   self.groups.process_status_update))
 
         # self.dispatcher.add_handler(PermissionCommandHandler('outputcommands',
         #                                                      [self.require_privmsg,
