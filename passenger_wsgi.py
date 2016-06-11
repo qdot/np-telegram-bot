@@ -32,7 +32,7 @@ for bot in config.sections():
     module = config[bot]["module_name"]
     importlib.import_module(module)
     bots[config[bot]["token"]] = getattr(sys.modules[module],
-                                         "create_bot")(config[bot])
+                                         "create_webhook_bot")(config[bot])
 
 if len(bots.keys()) == 0:
     raise RuntimeError("Not running any bots!")

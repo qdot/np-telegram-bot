@@ -42,6 +42,34 @@ class NPTelegramBot(object):
         self.chats = ChatManager(self.store)
         self.chats.add_join_filter(self.chats.block_filter)
 
+    @staticmethod
+    def parse_cli_arguments():
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-c", "--config", dest="config",
+                            help="Configuration File to use")
+        parser.add_argument("-b", "--bot", dest="bot",
+                            help="Bot name from configuration file to use")
+        args = parser.parse_args()
+
+        if not args.config:
+            parser.print_help()
+            raise RuntimeError("Config file argument required!")
+
+        if not args.bot:
+            parser.print_help()
+            raise RuntimeError("Bot name argument required!")
+
+        try:
+            config = configparser.ConfigParser()
+            config.read(args.config)
+        except:
+            raise RuntimeError("Cannot read config file!")
+
+        if args.bot not in config.sections():
+            raise RuntimeError("Bot {0} not in config file!".format(args.bot))
+        return config[args.bot]
+
+    def setup_commands(self):
         # Make sure the message handlers are in different groups so they are
         # always run
         self.dispatcher.add_handler(MessageHandler([Filters.text],
@@ -164,68 +192,30 @@ class NPTelegramBot(object):
         self.try_register(bot, update)
         self.handle_help(bot, update)
 
+    def start_webhook_thread(self):
+        if "webhook_url" not in self.config:
+            print("No webhook URL to bind to!")
+            raise RuntimeError()
+        self.updater.bot.setWebhook(webhook_url=self.config["webhook_url"])
+        # Steal the queue from the updater.
+        self.update_queue = self.updater.update_queue
+        self.thread = Thread(target=self.dispatcher.start, name='dispatcher')
+        self.thread.start()
+
+    def add_webhook_update(self, update):
+        self.update_queue.put(update)
+
     def start_loop(self):
         self.updater.start_polling()
         self.updater.idle()
 
     def shutdown(self):
-        pass
+        if self.thread:
+            self.thread.join(1)
 
 
-class NPTelegramBotCLI(NPTelegramBot):
-    def __init__(self):
-        parser = argparse.ArgumentParser()
-        parser.add_argument("-c", "--config", dest="config",
-                            help="Configuration File to use")
-        parser.add_argument("-b", "--bot", dest="bot",
-                            help="Bot name from configuration file to use")
-        args = parser.parse_args()
-
-        if not args.config:
-            print("Config file argument required!")
-            parser.print_help()
-            return
-
-        if not args.bot:
-            print("Bot name argument required!")
-            parser.print_help()
-            return
-
-        try:
-            config = configparser.ConfigParser()
-            config.read(args.config)
-        except:
-            print("Cannot read config file!")
-            return
-
-        if args.bot not in config.sections():
-            print("Bot {0} not in config file!".format(args.bot))
-            return
-
-        super().__init__(config[args.bot])
-
-
-class NPTelegramBotThread(NPTelegramBot):
-    def __init__(self, config):
-        super().__init__(config)
-        if "webhook_url" not in config:
-            print("No webhook URL to bind to!")
-            raise RuntimeError()
-        self.updater.bot.setWebhook(webhook_url=config["webhook_url"])
-        # Steal the queue from the updater.
-        self.update_queue = self.updater.update_queue
-
-        # Start the thread
-        self.thread = Thread(target=self.dispatcher.start, name='dispatcher')
-        self.thread.start()
-
-    def add_update(self, update):
-        self.update_queue.put(update)
-
-    def shutdown(self):
-        self.thread.join(1)
-        super().shutdown()
-
-
-def create_bot(config):
-    return NPTelegramBotThread(config)
+def create_webhook_bot(config):
+    bot = NPTelegramBot(config)
+    bot.setup_commands()
+    bot.start_webhook_thread()
+    return bot
