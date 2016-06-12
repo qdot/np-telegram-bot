@@ -117,7 +117,6 @@ class NPTelegramBot(object):
         self.dispatcher.add_handler(PermissionCommandHandler('grouplist',
                                                              [self.require_privmsg,
                                                               partial(self.require_flag, flag="admin")],
-                                                             self.conversations,
                                                              self.chats.list_known_chats))
         self.dispatcher.add_handler(ConversationHandler('groupleave',
                                                         [self.require_privmsg,

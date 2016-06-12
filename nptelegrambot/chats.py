@@ -63,6 +63,22 @@ class ChatRedisTransactions(object):
         self.redis.srem("chat-flags", flag)
 
 
+class ChatFilters(object):
+    @staticmethod
+    def min_size_filter(bot, update, min_size):
+        count = bot.get_chat_member_count(update.message.chat.id)
+        if count <= min_size:
+            return "Chat size is less than {0} members.".format(min_size)
+        return None
+
+    @staticmethod
+    def max_size_filter(bot, update, max_size):
+        count = bot.get_chat_member_count(update.message.chat.id)
+        if count >= max_size:
+            return "Chat size is greater than {0} members.".format(max_size)
+        return None
+
+
 class ChatManager(NPModuleBase):
     def __init__(self, redis):
         super().__init__(__name__)
@@ -166,12 +182,12 @@ class ChatManager(NPModuleBase):
         self.join_filters.append(join_filter)
 
     def list_known_chats(self, bot, update):
-        chats = self.get_chats()
+        chats = self.trans.get_chats()
         msg = "Chats I know about and my status in them:\n\n"
         for c in chats:
             msg += "{0} - {1}\n".format(c["title"], c["id"])
             msg += "- Status: {0}\n".format(c["status"])
-            msg += "- Size: {0}\n\n".format(c["size"])
+            #msg += "- Size: {0}\n\n".format(c["size"])
         bot.sendMessage(update.message.chat.id,
                         text=msg)
 
@@ -189,20 +205,6 @@ class ChatManager(NPModuleBase):
         bot.leaveChat(leave_chat["id"])
         if block:
             self.trans.add_chat_flag(leave_chat["id"], "block")
-
-    @staticmethod
-    def min_size_filter(bot, update, min_size):
-        count = bot.get_chat_member_count(update.message.chat.id)
-        if count >= min_size:
-            return "Chat size is less than {0} members.".format(min_size)
-        return None
-
-    @staticmethod
-    def max_size_filter(bot, update, max_size):
-        count = bot.get_chat_member_count(update.message.chat.id)
-        if count <= max_size:
-            return "Chat size is greater than {0} members.".format(max_size)
-        return None
 
     def block_filter(self, bot, update):
         flags = self.trans.get_chat_flags(update.message.chat.id)
