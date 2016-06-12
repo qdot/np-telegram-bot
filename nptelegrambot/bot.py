@@ -16,6 +16,8 @@ class NPTelegramBot(object):
 
     def __init__(self, config):
         self.logger = logging.getLogger(__name__)
+        self.config = config
+
         if "token" not in config:
             print("Cannot load token!")
             raise RuntimeError()

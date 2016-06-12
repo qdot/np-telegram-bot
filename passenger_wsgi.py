@@ -15,9 +15,11 @@ config.read("config.ini")
 
 bots = {}
 for bot in config.sections():
-    if "disabled" in config[bot] and config[bot]["webhook"] == 1:
+    if "disabled" in config[bot] and config[bot]["webhook"] == "1":
+        print("Bot {0} disabled".format(bot))
         continue
-    if "webhook" not in config[bot] or config[bot]["webhook"] != 1:
+    if "webhook" not in config[bot] or config[bot]["webhook"] != "1":
+        print("Bot {0} not using webhook".format(bot))
         continue
     if "repo_name" not in config[bot]:
         raise RuntimeError("Cannot find repo for bot {0}".format(bot))
