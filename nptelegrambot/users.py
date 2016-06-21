@@ -55,12 +55,20 @@ class UserRedisTransactions(object):
     def get_user_unadded_flags(self, id):
         return self.redis.sdiff("user-flags", "{0}:flags".format(id))
 
+    def get_blocked_users(self):
+        return self.redis.smembers("blocked-users")
+
+    def block_user(self, id):
+        self.redis.sadd("blocked-users", id)
+        self.add_user_flag(id, "block")
+
 
 class UserManager(NPModuleBase):
     def __init__(self, store):
         super().__init__(__name__)
         self.trans = UserRedisTransactions(store)
         self.has_admin = True
+        self.block_list = self.trans.get_blocked_users()
         if self.trans.get_num_users() == 0:
             self.has_admin = False
 
@@ -144,7 +152,7 @@ class UserManager(NPModuleBase):
     def add_flag(self, bot, update):
         while True:
             bot.sendMessage(update.message.chat.id,
-                            text="Forward me a message from the user you want to add flags to, or /cancel.")
+                            text="Forward me a message from the user you want to add flags to, or send me their ID, or /cancel.")
             (bot, update) = yield
             if (update.message.forward_from is not None and
                 self.is_valid_user(update.message.forward_from.id)):
@@ -185,3 +193,24 @@ class UserManager(NPModuleBase):
         if flag in self.trans.get_user_flags(user_id):
             return True
         return False
+
+    def block_user(self, bot, update):
+        while True:
+            bot.sendMessage(update.message.chat.id,
+                            text="Forward me a message from the user you want to block, or send me their ID, or /cancel.")
+            (bot, update) = yield
+            if update.message.forward_from is not None:
+                user_id = update.message.forward_from.id
+                break
+            try:
+                user_id = str(int(update.message.text))
+                break
+            except:
+                pass
+        self.trans.block_user(user_id)
+        self.block_list = self.trans.get_blocked_users()
+        bot.sendMessage(update.message.chat.id,
+                        "User {} banned!".format(user_id))
+
+    def is_blocked(self, update):
+        return str(update.message.chat.id) in self.block_list

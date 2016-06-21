@@ -3,6 +3,7 @@ from .permissioncommandhandler import PermissionCommandHandler
 from .users import UserManager
 from .conversations import ConversationManager, ConversationHandler
 from .chats import ChatManager
+from .blockdispatcher import BlockDispatcher
 from threading import Thread
 from functools import partial
 import redis
@@ -37,12 +38,14 @@ class NPTelegramBot(object):
             print("No backing store specified in config file!")
             raise RuntimeError()
 
-        self.updater = Updater(token=tg_token)
-        self.dispatcher = self.updater.dispatcher
         self.conversations = ConversationManager()
         self.users = UserManager(self.store)
         self.chats = ChatManager(self.store)
         self.chats.add_join_filter(self.chats.block_filter)
+
+        self.thread = None
+        self.updater = Updater(token=tg_token)
+        self.dispatcher = BlockDispatcher(self.updater, self.users)
 
     @staticmethod
     def parse_cli_arguments():
@@ -110,6 +113,12 @@ class NPTelegramBot(object):
                                                          partial(self.require_flag, flag="admin")],
                                                         self.conversations,
                                                         self.users.remove_flag))
+
+        self.dispatcher.add_handler(ConversationHandler('userblock',
+                                                        [self.require_privmsg,
+                                                         partial(self.require_flag, flag="admin")],
+                                                        self.conversations,
+                                                        self.users.block_user))
 
         self.dispatcher.add_handler(ConversationHandler('groupbroadcast',
                                                         [self.require_privmsg,
