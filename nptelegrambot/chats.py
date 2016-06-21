@@ -106,8 +106,9 @@ class ChatManager(NPModuleBase):
         for f in self.join_filters:
             reason = f(bot, update)
             if reason is not None:
-                bot.sendMessage(chat.id,
-                                text="Sorry, I can't be in this chat! {0}".format(reason if type(reason) is str else ""))
+                if type(reason) is str:
+                    bot.sendMessage(chat.id,
+                                    text="Sorry, I can't be in this chat! {0}".format(reason if type(reason) is str else ""))
                 bot.leaveChat(chat.id)
                 return False
         return True
@@ -143,13 +144,12 @@ class ChatManager(NPModuleBase):
 
     def process_group_chat_created(self, bot, update):
         # Bot invited as a creating member of a group chat
-        if not self.run_join_checks(bot, update):
-            return
+        self.run_join_checks(bot, update)
 
     def process_supergroup_chat_created(self, bot, update):
-        # Bot invited as a creating member of a supergroup chat (does this happen?)
-        if not self.run_join_checks(bot, update):
-            return
+        # Bot invited as a creating member of a supergroup chat (does this
+        # happen?)
+        self.run_join_checks(bot, update)
 
     # migration is sent as both from_id and to_id. Both messages contain the
     # same information, so we can use that to update ourselves.
@@ -210,5 +210,5 @@ class ChatManager(NPModuleBase):
         flags = self.trans.get_chat_flags(update.message.chat.id)
         if flags is not None and "block" in flags:
             # Don't actually tell chat they're banned.
-            return True
+            return "This channel is blocked!"
         return None
