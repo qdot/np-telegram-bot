@@ -185,9 +185,13 @@ class ChatManager(NPModuleBase):
         chats = self.trans.get_chats()
         msg = "Chats I know about and my status in them:\n\n"
         for c in chats:
-            msg += "{0} - {1}\n".format(c["title"], c["id"])
-            msg += "- Status: {0}\n".format(c["status"])
-            #msg += "- Size: {0}\n\n".format(c["size"])
+            try:
+                msg += "{0} - {1}\n".format(c["title"], c["id"])
+                msg += "- Status: {0}\n".format(c["status"])
+                #msg += "- Size: {0}\n\n".format(c["size"])
+            except:
+                #TODO Fixed left chat info!
+                pass
         bot.sendMessage(update.message.chat.id,
                         text=msg)
 
