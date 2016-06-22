@@ -157,7 +157,7 @@ class NPTelegramBot(object):
 
     def handle_error(self, bot, update, error):
         # TODO Add ability for bot to message owner with stack traces
-        self.logger.warn("Exception thrown! %s", self.error)
+        self.logger.warn("Exception thrown! %s", error)
 
     def try_register(self, bot, update):
         user_id = update.message.from_user.id
