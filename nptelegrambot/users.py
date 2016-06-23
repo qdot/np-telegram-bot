@@ -213,4 +213,10 @@ class UserManager(NPModuleBase):
                         "User {} banned!".format(user_id))
 
     def is_blocked(self, update):
-        return str(update.message.chat.id) in self.block_list
+        if update.message is not None:
+            msg = update.message
+        elif update.edited_message is not None:
+            msg = update.edited_message
+        else:
+            return False
+        return str(msg.from_user.id) in self.block_list
